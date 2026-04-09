@@ -1,0 +1,8 @@
+streamlit
+FinanceDataReader
+pandas
+ta
+pykrx
+requests
+beautifulsoup4
+matplotlib
