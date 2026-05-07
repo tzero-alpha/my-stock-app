@@ -89,7 +89,7 @@ def main():
     # 1. 종목이 있을 때 보내는 메일 내용
     subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견"
     body = filtered_df.to_html()
-else:
+    else:
     # 2. 종목이 없을 때 보내는 메일 내용 (추가할 부분)
     subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
     body = "오늘 시장을 분석했으나 설정하신 조건(RSI, 거래량 등)에 일치하는 종목이 발견되지 않았습니다."
@@ -103,7 +103,7 @@ msg['Subject'] = subject
 msg['From'] = EMAIL_USER
 msg['To'] = RECEIVER_EMAIL
 
-try:
+    try:
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(EMAIL_USER, EMAIL_PASSWORD)
         smtp.send_message(msg)
