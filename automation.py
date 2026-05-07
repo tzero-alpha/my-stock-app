@@ -43,8 +43,10 @@ def check_technical_conditions(df, rsi_limit=63):
 
 def main():
     print("분석 시작...")
-    # 코스피 상위 200개 종목 분석 (기존 로직 유지)
-    stocks = fdr.StockListing('KOSPI').head(200)
+    # 코스피 종목 리스트 가져오기 (PER 정보 포함됨)
+    stocks_info = fdr.StockListing('KRX')
+    # 분석 속도를 위해 상위 200개 종목 대상 (필요시 조절 가능)
+    stocks = stocks_info[stocks_info['Market'] == 'KOSPI'].head(200)
     
     found_stocks = []
     
@@ -53,26 +55,35 @@ def main():
             df = fdr.DataReader(row['Code'], (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d'))
             match, info = check_technical_conditions(df)
             if match:
-                # 메일 표에 들어갈 데이터 정리
+                # [PER 추가] 정보 취합
+                # FinanceDataReader의 기본 리스트에는 PER 정보가 포함되어 있습니다.
+                per_val = row.get('PER', 'N/A')
+                
                 found_stocks.append({
                     '종목명': row['Name'], 
                     '코드': row['Code'], 
                     '현재가': f"{info['price']:,}원", 
-                    'RSI': info['rsi']
+                    'RSI': info['rsi'],
+                    'PER': per_val
                 })
-                print(f"포착: {row['Name']}")
+                print(f"포착: {row['Name']} (PER: {per_val})")
         except: continue
 
-    # [핵심 수정] 검색 결과를 데이터프레임으로 변환
+    # 검색 결과를 데이터프레임으로 변환
     filtered_df = pd.DataFrame(found_stocks)
 
-    # --- 메일 내용 구성 (들여쓰기 및 변수명 일치 완료) ---
+    # --- 메일 내용 구성 ---
     if not filtered_df.empty:
-        subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견"
-        body = f"<h3>오늘의 검색 결과입니다.</h3>{filtered_df.to_html(index=False)}"
+        # PER 기준으로 오름차순 정렬 (저PER 종목이 위로 오게 함)
+        try:
+            filtered_df = filtered_df.sort_values(by='PER')
+        except: pass
+        
+        subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견 (PER 포함)"
+        body = f"<h3>오늘의 분석 결과입니다. (PER 낮은 순 정렬)</h3>{filtered_df.to_html(index=False)}"
     else:
         subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
-        body = "<h3>분석 완료 보고</h3><p>설정하신 조건(RSI, MACD 등)을 만족하는 종목이 없습니다. 시스템은 정상 작동 중입니다.</p>"
+        body = "<h3>분석 완료 보고</h3><p>설정하신 기술적 지표를 만족하는 종목이 없습니다.</p>"
 
     # --- 메일 발송 로직 ---
     msg = MIMEText(body, 'html')
