@@ -2,6 +2,7 @@ import FinanceDataReader as fdr
 import pandas as pd
 import ta
 from datetime import datetime, timedelta
+from pykrx import stock  # PER 정보를 정확히 가져오기 위해 추가
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -18,7 +19,6 @@ def check_technical_conditions(df, rsi_limit=63):
         high = df['High']
         low = df['Low']
         
-        # [기존 조건 유지] 지표 계산
         ma5 = ta.trend.sma_indicator(close, window=5)
         ma20 = ta.trend.sma_indicator(close, window=20)
         rsi = ta.momentum.rsi(close, window=14)
@@ -30,7 +30,6 @@ def check_technical_conditions(df, rsi_limit=63):
         curr_close = close.iloc[-1]
         curr_rsi = rsi.iloc[-1]
         
-        # [기존 조건 유지] 추세, RSI, MACD, 일목균형표 검사
         cond_trend = ma5.iloc[-1] > ma20.iloc[-1]
         cond_rsi = 30 <= curr_rsi <= rsi_limit
         cond_macd = macd_obj.macd().iloc[-1] > macd_obj.macd_signal().iloc[-1]
@@ -43,25 +42,37 @@ def check_technical_conditions(df, rsi_limit=63):
 
 def main():
     print("분석 시작...")
-    # 코스피 종목 리스트 가져오기 (PER 정보 포함됨)
-    stocks_info = fdr.StockListing('KRX')
-    # 분석 속도를 위해 상위 200개 종목 대상 (필요시 조절 가능)
-    stocks = stocks_info[stocks_info['Market'] == 'KOSPI'].head(200)
+    # 1. 오늘 기준 PER/PBR 지표 리스트 가져오기 (pykrx 사용)
+    today_str = datetime.now().strftime('%Y%m%d')
+    try:
+        df_fundamental = stock.get_market_fundamental_ticker(today_str, market="KOSPI")
+    except:
+        # 시장이 안 열린 경우 어제 날짜로 시도
+        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+        df_fundamental = stock.get_market_fundamental_ticker(yesterday_str, market="KOSPI")
+
+    # 2. 코스피 종목 리스트 가져오기
+    stocks_info = fdr.StockListing('KOSPI').head(200) # 상위 200개
     
     found_stocks = []
     
-    for _, row in stocks.iterrows():
+    for _, row in stocks_info.iterrows():
+        code = row['Code']
         try:
-            df = fdr.DataReader(row['Code'], (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d'))
+            df = fdr.DataReader(code, (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d'))
             match, info = check_technical_conditions(df)
             if match:
-                # [PER 추가] 정보 취합
-                # FinanceDataReader의 기본 리스트에는 PER 정보가 포함되어 있습니다.
-                per_val = row.get('PER', 'N/A')
+                # pykrx 데이터에서 PER 가져오기
+                try:
+                    per_val = df_fundamental.loc[code, 'PER']
+                    # PER이 0이거나 너무 큰 값(N/A 대용) 필터링
+                    if per_val == 0: per_val = "N/A"
+                except:
+                    per_val = "N/A"
                 
                 found_stocks.append({
                     '종목명': row['Name'], 
-                    '코드': row['Code'], 
+                    '코드': code, 
                     '현재가': f"{info['price']:,}원", 
                     'RSI': info['rsi'],
                     'PER': per_val
@@ -69,23 +80,21 @@ def main():
                 print(f"포착: {row['Name']} (PER: {per_val})")
         except: continue
 
-    # 검색 결과를 데이터프레임으로 변환
     filtered_df = pd.DataFrame(found_stocks)
 
     # --- 메일 내용 구성 ---
     if not filtered_df.empty:
-        # PER 기준으로 오름차순 정렬 (저PER 종목이 위로 오게 함)
-        try:
-            filtered_df = filtered_df.sort_values(by='PER')
-        except: pass
+        # PER 수치가 있는 것들을 우선적으로 위로 정렬 (N/A는 아래로)
+        filtered_df['PER_sort'] = pd.to_numeric(filtered_df['PER'], errors='coerce')
+        filtered_df = filtered_df.sort_values(by='PER_sort', ascending=True).drop(columns=['PER_sort'])
         
-        subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견 (PER 포함)"
-        body = f"<h3>오늘의 분석 결과입니다. (PER 낮은 순 정렬)</h3>{filtered_df.to_html(index=False)}"
+        subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견 (PER 적용)"
+        body = f"<h3>오늘의 분석 결과입니다. (저PER 순 정렬)</h3>{filtered_df.to_html(index=False)}"
     else:
         subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
-        body = "<h3>분석 완료 보고</h3><p>설정하신 기술적 지표를 만족하는 종목이 없습니다.</p>"
+        body = "<h3>분석 완료 보고</h3><p>기술적 지표를 만족하는 종목이 발견되지 않았습니다.</p>"
 
-    # --- 메일 발송 로직 ---
+    # --- 메일 발송 ---
     msg = MIMEText(body, 'html')
     msg['Subject'] = subject
     msg['From'] = EMAIL_USER
@@ -95,7 +104,7 @@ def main():
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(EMAIL_USER, EMAIL_PASSWORD)
             smtp.send_message(msg)
-        print("메일을 성공적으로 보냈습니다!")
+        print("메일 발송 성공!")
     except Exception as e:
         print(f"메일 발송 실패: {e}")
 
