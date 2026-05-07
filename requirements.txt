@@ -1,8 +1,0 @@
-streamlit
-finance-datareader
-pandas
-ta
-pykrx
-requests
-beautifulsoup4
-matplotlib
