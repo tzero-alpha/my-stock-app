@@ -1,5 +1,5 @@
 pandas
-FinanceDataReader
+finance-datareader
 ta
 pykrx
 beautifulsoup4
