@@ -7,6 +7,11 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 
+# --- 설정 및 환경 변수 ---
+EMAIL_USER = os.environ.get('EMAIL_USER')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+RECEIVER_EMAIL = os.environ.get('RECEIVER_EMAIL')
+
 def check_technical_conditions(df, rsi_limit=63):
     if len(df) < 60: return False, {}
     try:
@@ -20,17 +25,11 @@ def check_technical_conditions(df, rsi_limit=63):
         macd_obj = ta.trend.MACD(close)
         
         ichimoku = ta.trend.IchimokuIndicator(high=high, low=low)
-        
-        # [수정] .iloc[-1] 대신 .dropna().iloc[-1]을 사용하여 NaN 에러 방지
-        # 처음 코드의 조건(A, B 중 높은 값보다 주가가 위에 있을 것)은 그대로 유지합니다.
-        span_a = ichimoku.ichimoku_a().dropna()
-        span_b = ichimoku.ichimoku_b().dropna()
-        cloud_top = max(span_a.iloc[-1], span_b.iloc[-1])
+        cloud_top = max(ichimoku.ichimoku_a().iloc[-1], ichimoku.ichimoku_b().iloc[-1])
 
         curr_close = close.iloc[-1]
         curr_rsi = rsi.iloc[-1]
         
-        # 처음 코드와 동일한 조건문
         cond_trend = ma5.iloc[-1] > ma20.iloc[-1]
         cond_rsi = 30 <= curr_rsi <= rsi_limit
         cond_macd = macd_obj.macd().iloc[-1] > macd_obj.macd_signal().iloc[-1]
@@ -43,34 +42,37 @@ def check_technical_conditions(df, rsi_limit=63):
 
 def main():
     print("분석 시작...")
-    today_str = datetime.now().strftime('%Y%m%d')
     
-    # [수정] 정확한 함수명 사용 및 데이터 존재 여부 체크 루프
+    # [수정] KRX 서버 차단을 대비한 방어막
     df_fundamental = pd.DataFrame()
-    for i in range(5):
-        search_date = (datetime.now() - timedelta(days=i)).strftime('%Y%m%d')
-        # 시장 전체 데이터를 가져오기 위해 _by_ticker 사용
-        df_fundamental = stock.get_market_fundamental_by_ticker(search_date, market="KOSPI")
-        if not df_fundamental.empty: break
+    try:
+        today_str = datetime.now().strftime('%Y%m%d')
+        df_fundamental = stock.get_market_fundamental(today_str, market="KOSPI")
+    except Exception:
+        try:
+            yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+            df_fundamental = stock.get_market_fundamental(yesterday_str, market="KOSPI")
+        except Exception:
+            print("⚠️ 거래소 서버가 접근을 차단했습니다. PER 없이 분석을 진행합니다.")
 
-    # StockListing 결과의 컬럼명은 환경에 따라 'Code' 혹은 'Symbol'일 수 있음
-    stocks_info = fdr.StockListing('KOSPI')
-    code_col = 'Code' if 'Code' in stocks_info.columns else 'Symbol'
+    stocks_info = fdr.StockListing('KOSPI').head(200)
     
     found_stocks = []
     
-    for _, row in stocks_info.head(200).iterrows():
-        code = row[code_col]
+    for _, row in stocks_info.iterrows():
+        code = row['Code']
         try:
-            # 일목균형표 계산을 위해 데이터 기간을 150일로 늘림
-            df = fdr.DataReader(code, (datetime.now() - timedelta(days=150)).strftime('%Y-%m-%d'))
+            df = fdr.DataReader(code, (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d'))
             match, info = check_technical_conditions(df)
             if match:
-                # [수정] KeyError 방지를 위해 index 체크 추가
                 per_val = "N/A"
-                if code in df_fundamental.index:
-                    per_val = df_fundamental.loc[code, 'PER']
-                    if pd.isna(per_val) or per_val == 0: per_val = "N/A"
+                # 데이터가 정상적으로 들어왔을 때만 PER 값 찾기
+                if not df_fundamental.empty and code in df_fundamental.index:
+                    try:
+                        per_val = df_fundamental.loc[code, 'PER']
+                        if pd.isna(per_val) or per_val == 0: per_val = "N/A"
+                    except:
+                        pass
                 
                 found_stocks.append({
                     '종목명': row['Name'], 
@@ -82,8 +84,11 @@ def main():
                 print(f"포착: {row['Name']} (PER: {per_val})")
         except: continue
 
+    filtered_df = pd.DataFrame(found_stocks)
+
     # --- 메일 내용 구성 ---
     if not filtered_df.empty:
+        # PER 수치가 N/A가 아닌 종목만 숫자로 변환해서 정렬
         filtered_df['PER_sort'] = pd.to_numeric(filtered_df['PER'], errors='coerce')
         filtered_df = filtered_df.sort_values(by='PER_sort', ascending=True).drop(columns=['PER_sort'])
         
