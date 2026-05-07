@@ -1,6 +1,0 @@
-pandas
-FinanceDataReader
-ta
-pykrx
-beautifulsoup4
-requests
