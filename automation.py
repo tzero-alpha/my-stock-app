@@ -85,12 +85,28 @@ def main():
         except: continue
 
     # 결과 취합 및 메일 발송
-    if found_stocks:
-        report_body = f"{datetime.now().strftime('%Y-%m-%d')} 주식 분석 결과입니다.\n\n"
-        report_body += "\n".join(found_stocks)
-        send_email(f"📈 [주식 포착] {len(found_stocks)}개 종목 발견", report_body)
-    else:
-        print("조건에 맞는 종목이 없습니다.")
+    if not filtered_df.empty:
+    # 1. 종목이 있을 때 보내는 메일 내용
+    subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견"
+    body = filtered_df.to_html()
+else:
+    # 2. 종목이 없을 때 보내는 메일 내용 (추가할 부분)
+    subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
+    body = "오늘 시장을 분석했으나 설정하신 조건(RSI, 거래량 등)에 일치하는 종목이 발견되지 않았습니다."
 
-if __name__ == "__main__":
-    main()
+# --- 메일 발송 로직 ---
+import smtplib
+from email.mime.text import MIMEText
+
+msg = MIMEText(body, 'html') # 'html'로 설정해야 표가 잘 보여요
+msg['Subject'] = subject
+msg['From'] = EMAIL_USER
+msg['To'] = RECEIVER_EMAIL
+
+try:
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(EMAIL_USER, EMAIL_PASSWORD)
+        smtp.send_message(msg)
+    print("메일을 성공적으로 보냈습니다!")
+except Exception as e:
+    print(f"메일 발송 실패: {e}")
