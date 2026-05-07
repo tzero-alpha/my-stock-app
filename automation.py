@@ -2,7 +2,7 @@ import FinanceDataReader as fdr
 import pandas as pd
 import ta
 from datetime import datetime, timedelta
-from pykrx import stock  # PER 정보를 정확히 가져오기 위해 추가
+from pykrx import stock
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -42,17 +42,15 @@ def check_technical_conditions(df, rsi_limit=63):
 
 def main():
     print("분석 시작...")
-    # 1. 오늘 기준 PER/PBR 지표 리스트 가져오기 (pykrx 사용)
+    # [수정된 부분] 명령어 이름을 정확한 버전으로 변경했습니다.
     today_str = datetime.now().strftime('%Y%m%d')
     try:
-        df_fundamental = stock.get_market_fundamental_ticker(today_str, market="KOSPI")
+        df_fundamental = stock.get_market_fundamental(today_str, market="KOSPI")
     except:
-        # 시장이 안 열린 경우 어제 날짜로 시도
         yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
-        df_fundamental = stock.get_market_fundamental_ticker(yesterday_str, market="KOSPI")
+        df_fundamental = stock.get_market_fundamental(yesterday_str, market="KOSPI")
 
-    # 2. 코스피 종목 리스트 가져오기
-    stocks_info = fdr.StockListing('KOSPI').head(200) # 상위 200개
+    stocks_info = fdr.StockListing('KOSPI').head(200)
     
     found_stocks = []
     
@@ -62,11 +60,9 @@ def main():
             df = fdr.DataReader(code, (datetime.now() - timedelta(days=100)).strftime('%Y-%m-%d'))
             match, info = check_technical_conditions(df)
             if match:
-                # pykrx 데이터에서 PER 가져오기
                 try:
                     per_val = df_fundamental.loc[code, 'PER']
-                    # PER이 0이거나 너무 큰 값(N/A 대용) 필터링
-                    if per_val == 0: per_val = "N/A"
+                    if pd.isna(per_val) or per_val == 0: per_val = "N/A"
                 except:
                     per_val = "N/A"
                 
@@ -84,7 +80,6 @@ def main():
 
     # --- 메일 내용 구성 ---
     if not filtered_df.empty:
-        # PER 수치가 있는 것들을 우선적으로 위로 정렬 (N/A는 아래로)
         filtered_df['PER_sort'] = pd.to_numeric(filtered_df['PER'], errors='coerce')
         filtered_df = filtered_df.sort_values(by='PER_sort', ascending=True).drop(columns=['PER_sort'])
         
