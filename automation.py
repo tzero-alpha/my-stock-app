@@ -13,9 +13,9 @@ from email.mime.multipart import MIMEMultipart
 
 # --- 설정 및 환경 변수 ---
 # GitHub Secrets에 등록한 값을 불러옵니다.
-EMAIL_USER = os.environ.get('amnait84@gmail.com')
-EMAIL_PASSWORD = os.environ.get('+4hosikcc1')
-RECEIVER_EMAIL = os.environ.get('amnait84@gmail.com') # 받는 사람 이메일
+EMAIL_USER = os.environ.get('EMAIL_USER')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+RECEIVER_EMAIL = os.environ.get('RECEIVER_EMAIL') # 받는 사람 이메일
 
 def send_email(subject, body):
     if not EMAIL_USER or not EMAIL_PASSWORD:
@@ -84,29 +84,28 @@ def main():
                 print(f"포착: {row['Name']}")
         except: continue
 
-    # 결과 취합 및 메일 발송
+    # --- 메일 내용 구성 (들여쓰기 수정됨) ---
     if not filtered_df.empty:
-    # 1. 종목이 있을 때 보내는 메일 내용
-    subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견"
-    body = filtered_df.to_html()
+        subject = f"📈 [주식 분석] {len(filtered_df)}개 종목 발견"
+        body = f"<h3>오늘의 조건 검색 결과입니다.</h3>{filtered_df.to_html(index=False)}"
     else:
-    # 2. 종목이 없을 때 보내는 메일 내용 (추가할 부분)
-    subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
-    body = "오늘 시장을 분석했으나 설정하신 조건(RSI, 거래량 등)에 일치하는 종목이 발견되지 않았습니다."
+        subject = "🔍 [주식 분석] 오늘 조건에 맞는 종목이 없습니다."
+        body = "<h3>분석 완료</h3><p>오늘 설정하신 조건(RSI, 일목균형표 등)에 일치하는 종목이 없습니다. 시스템은 정상 작동 중입니다.</p>"
 
-# --- 메일 발송 로직 ---
-import smtplib
-from email.mime.text import MIMEText
-
-msg = MIMEText(body, 'html') # 'html'로 설정해야 표가 잘 보여요
-msg['Subject'] = subject
-msg['From'] = EMAIL_USER
-msg['To'] = RECEIVER_EMAIL
+    # --- 메일 발송 로직 ---
+    msg = MIMEText(body, 'html')
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_USER
+    msg['To'] = RECEIVER_EMAIL
 
     try:
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-        smtp.login(EMAIL_USER, EMAIL_PASSWORD)
-        smtp.send_message(msg)
-    print("메일을 성공적으로 보냈습니다!")
-except Exception as e:
-    print(f"메일 발송 실패: {e}")
+        # 보안을 위해 SSL(465) 방식을 사용합니다.
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(EMAIL_USER, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+        print("메일을 성공적으로 보냈습니다!")
+    except Exception as e:
+        print(f"메일 발송 실패: {e}")
+
+if __name__ == "__main__":
+    main()
