@@ -1,9 +1,8 @@
 name: Daily Stock Analysis
-
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 한국시간 오전 9시 실행 (UTC 00:00)
-  workflow_dispatch: # 수동 실행 버튼
+    # 한국 시간(KST) 아침 12시에 실행하려면 UTC 시간으로는 0시로 설정해야 합니다.
+    - cron: '0 0 * * *'
 
 jobs:
   run_analysis:
