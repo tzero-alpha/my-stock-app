@@ -2,7 +2,7 @@ name: Daily Stock Analysis
 
 on:
   schedule:
-    - cron: '0 14 * * *'
+    - cron: '0 9 * * *'
       timezone: 'Asia/Seoul'     # ← 한국 시간 기준 오전 9시
   workflow_dispatch:             # 수동 실행 버튼
 
