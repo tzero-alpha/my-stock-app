@@ -4,3 +4,5 @@ ta
 pykrx
 beautifulsoup4
 requests
+pandas_ta
+openpyxl
