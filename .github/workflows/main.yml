@@ -3,8 +3,8 @@ name: Daily Stock Analysis
 on:
   schedule:
     - cron: '0 9 * * *'
-      timezone: 'Asia/Seoul'     # ← 한국 시간 기준 오전 9시
-  workflow_dispatch:             # 수동 실행 버튼
+      timezone: 'Asia/Seoul'     # 한국 시간 오전 9시
+  workflow_dispatch:             # 수동 실행 가능
 
 jobs:
   run_analysis:
@@ -17,7 +17,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'                    # 캐싱으로 속도 향상
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -30,3 +30,22 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
         run: python automation.py
+
+      - name: Send Email Report
+        if: always()                    # 분석 성공/실패 상관없이 메일 전송
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: 📈 주식 포착기 Daily Report - ${{ github.event.repository.updated_at }}
+          body: |
+            오늘의 주식 포착기 분석이 완료되었습니다.
+            첨부파일을 확인해주세요.
+            
+            실행 시간: ${{ github.event.repository.updated_at }}
+          to: ${{ secrets.RECEIVER_EMAIL }}
+          from: 주식포착기 <${{ secrets.EMAIL_USER }}>
+          attachments: today_picks.html
+          secure: true
