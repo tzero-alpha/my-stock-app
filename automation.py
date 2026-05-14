@@ -112,16 +112,17 @@ def generate_beautiful_html(df, date_str):
             <div style="padding: 25px 30px;">
                 <h2>🎯 오늘의 유망주 ({len(df)}개)</h2>
                 <table>
-                    <thead>
+                    for _, row in df.iterrows():
+            change_class = "positive" if row['등락률'] > 0 else ""
+            html += f"""
                         <tr>
-                            <th>종목명</th>
-                            <th>현재가</th>
-                            <th>등락률</th>
-                            <th>RSI</th>
-                            <th>PER</th>
-                            <th>기관5일순매수</th>
-                            <th>시가총액(억)</th>
+                            <td class="stock-name">{row['종목명']}<br><small>{row['종목코드']}</small></td>
+                            <td>{row['현재가']:,}</td>
+                            <td class="{change_class}">+{row['등락률']}%</td>
+                            <td>{row['RSI']}</td>
+                            <td>{row['PER']}</td>
                         </tr>
+            """
                     </thead>
                     <tbody>
     """
