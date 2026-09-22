@@ -1,8 +1,0 @@
-pandas
-finance-datareader
-ta
-pykrx
-beautifulsoup4
-requests
-pandas-ta
-openpyxl
